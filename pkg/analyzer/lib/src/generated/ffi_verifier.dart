@@ -1040,25 +1040,42 @@ class FfiVerifier extends RecursiveAstVisitor<void> {
   /// Check that .address is only used in argument lists passed to native leaf
   /// calls.
   void _validateAddressPosition(Expression node, AstNode errorNode) {
-    var parent = node.parent;
-    // Since we are allowing .address.cast(), we need to traverse up one level
-    // to get the ffi Invocation (.cast() nested down one level the expression)
-    if (parent is MethodInvocation &&
-        parent.methodName.staticElement is MethodElement &&
-        parent.methodName.name == "cast" &&
-        parent.methodName.staticElement?.enclosingElement is ClassElement &&
-        parent.methodName.staticElement!.enclosingElement.isPointer) {
-      parent = parent.parent;
+    var argumentList = node.parent;
+    var argumentListParent = argumentList?.parent;
+    // Considering we have myPointer.address as node
+    // But finally it might sittign up as argument by having several level of property access such as
+    // myNative(myPointer.address.member1.member2.member3...memberN)
+    // But all we need to get the very root parent and reach its actual
+    // invocation
+    // ArgumentList (myPointer.address.member1.member2.member3...memberN, ..., ...) from myPointer.address
+    // From there we can easily get the parent of ArgumentList, which might be actual invocation
+    // Now, we can easily whether that is a invocation and it is a leafNative call (argumentListParent)
+    // If not so, we can just confirm that `address` is called somewhere which is not a leaf native call
+    if (argumentList is MethodInvocation || argumentList is PropertyAccess) {
+      Expression? rootArgumentExpression;
+      if (argumentList is MethodInvocation) {
+        rootArgumentExpression = argumentList.nullShortingTermination;
+      } else if (argumentList is PropertyAccess) {
+        rootArgumentExpression = argumentList.nullShortingTermination;
+      }
+      if (rootArgumentExpression == null) {
+        throw Error();
+      }
+      var rootArgumentListExpression = rootArgumentExpression.parent;
+      if (rootArgumentListExpression is ArgumentList) {
+        var rootMethodInvocation = rootArgumentListExpression.parent;
+        if (rootMethodInvocation is MethodInvocation) {
+          argumentList = rootArgumentListExpression;
+          argumentListParent = rootMethodInvocation;
+        }
+      }
     }
-    var grandParent = parent?.parent;
-    if (parent is! ArgumentList ||
-        grandParent is! MethodInvocation ||
-        !grandParent.isNativeLeafInvocation) {
-      _errorReporter.atNode(
-        errorNode,
-        FfiCode.ADDRESS_POSITION,
-      );
+    if (argumentList is ArgumentList &&
+        argumentListParent is MethodInvocation &&
+        argumentListParent.isNativeLeafInvocation) {
+      return;
     }
+    _errorReporter.atNode(errorNode, FfiCode.ADDRESS_POSITION);
   }
 
   void _validateAddressPrefixedIdentifier(PrefixedIdentifier node) {

@@ -5,6 +5,9 @@
 import 'dart:ffi';
 import 'dart:typed_data';
 
+@Native<Void Function(Pointer<Void>)>()
+external void myNonLeafNative(Pointer<Void> buff);
+
 @Native<Void Function(Pointer<Void>, Pointer<Int8>)>(isLeaf: true)
 external void myNativeWith2Param(Pointer<Void> buffer, Pointer<Int8> buffer2);
 
@@ -13,7 +16,7 @@ external void myNativeWith2Param(Pointer<Void> buffer, Pointer<Int8> buffer2);
 external void myNativeWith3Param(
     Pointer<Void> buffer, Pointer<Int8> buffer2, Pointer<Void> buffer3);
 
-void test_wrong_type() {
+void test_defined_leaf() {
   final buffer = Int8List.fromList([1]);
   myNativeWith2Param(buffer.address, buffer.address);
   //                        ^^^^^^^
@@ -105,30 +108,64 @@ void test_wrong_type() {
   // [analyzer] COMPILE_TIME_ERROR.ARGUMENT_TYPE_NOT_ASSIGNABLE
 }
 
-void test_undefined_arguments() {
+void test_undefined_leaf() {
   final buffer = Int8List.fromList([1]);
-  myNativeWith2Param(buffer.address.cast(), buffer.address.cd);
-  //                                                       ^^
-  // [cfe] The getter 'cd' isn't defined for the class 'Pointer<Int8>'.
+  myNativeWith2Param(buffer.address.cast(), buffer.address.doesntExist);
+  //                                                       ^^^^^^^^^^^
+  // [cfe] The getter 'doesntExist' isn't defined for the class 'Pointer<Int8>'.
   // [analyzer] COMPILE_TIME_ERROR.UNDEFINED_GETTER
-  //                                               ^^^^^^^
-  // [analyzer] COMPILE_TIME_ERROR.ADDRESS_POSITION
 
-  // This address position error is not expected which is a bug,
-  // https://github.com/dart-lang/sdk/issues/56613
-
-  myNativeWith2Param(buffer.address.cast<Int8>().cd, buffer.address);
-  //                                             ^^
-  // [cfe] The getter 'cd' isn't defined for the class 'Pointer<Int8>'.
+  myNativeWith2Param(buffer.address.cast<Int8>().doesntExist, buffer.address);
+  //                                             ^^^^^^^^^^^
+  // [cfe] The getter 'doesntExist' isn't defined for the class 'Pointer<Int8>'.
   // [analyzer] COMPILE_TIME_ERROR.UNDEFINED_GETTER
-  //                        ^^^^^^^
-  // [analyzer] COMPILE_TIME_ERROR.ADDRESS_POSITION
+}
 
-  // This address position error is not expected which is a bug,
-  // https://github.com/dart-lang/sdk/issues/56613
+void test_undefined_non_leaf() {
+  final buffer = Int8List.fromList([1]);
+
+  myNonLeafNative(buffer.address.cast().doesntExist);
+  //                                    ^^^^^^^^^^^
+  // [analyzer] COMPILE_TIME_ERROR.UNDEFINED_GETTER
+  // [cfe] The getter 'doesntExist' isn't defined for the class 'Pointer<NativeType>'.
+  //                     ^^^^^^^
+  // [analyzer] COMPILE_TIME_ERROR.ADDRESS_POSITION
+  // [cfe] The '.address' expression can only be used as argument to a leaf native external call.
+
+  myNonLeafNative(buffer.address.doesntExist);
+  //                             ^^^^^^^^^^^
+  // [cfe] The getter 'doesntExist' isn't defined for the class 'Pointer<Int8>'.
+  // [analyzer] COMPILE_TIME_ERROR.UNDEFINED_GETTER
+  //                     ^^^^^^^
+  // [analyzer] COMPILE_TIME_ERROR.ADDRESS_POSITION
+  // [cfe] The '.address' expression can only be used as argument to a leaf native external call.
+}
+
+void test_defined_non_leaf() {
+  final buffer = Int8List.fromList([1]);
+  myNonLeafNative(buffer.address.cast().address);
+  //              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  // [analyzer] COMPILE_TIME_ERROR.ARGUMENT_TYPE_NOT_ASSIGNABLE
+  //                                    ^^^^^^^
+  // [cfe] The argument type 'int' can't be assigned to the parameter type 'Pointer<Void>'.
+  //                     ^^^^^^^
+  // [analyzer] COMPILE_TIME_ERROR.ADDRESS_POSITION
+  // [cfe] The '.address' expression can only be used as argument to a leaf native external call.
+
+  myNonLeafNative(buffer.address.address);
+  //              ^^^^^^^^^^^^^^^^^^^^^^
+  // [analyzer] COMPILE_TIME_ERROR.ARGUMENT_TYPE_NOT_ASSIGNABLE
+  //                             ^^^^^^^
+  // [cfe] The argument type 'int' can't be assigned to the parameter type 'Pointer<Void>'.
+  //                     ^^^^^^^
+  // [analyzer] COMPILE_TIME_ERROR.ADDRESS_POSITION
+  // [cfe] The '.address' expression can only be used as argument to a leaf native external call.
 }
 
 void main() {
-  test_undefined_arguments();
-  test_wrong_type();
+  // test_defined_leaf();
+  test_defined_non_leaf();
+
+  test_undefined_leaf();
+  test_undefined_non_leaf();
 }

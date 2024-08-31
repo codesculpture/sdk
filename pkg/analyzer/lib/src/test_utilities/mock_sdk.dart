@@ -835,9 +835,10 @@ final class Pointer<T extends NativeType> implements SizedNativeType {
   static Pointer<NativeFunction<T>> fromFunction<T extends Function>(
       @DartRepresentationOf("T") Function f,
       [Object exceptionalReturn]) {}
+  
+  external int get address;
 
   external Pointer<U> cast<U extends NativeType>();
-
 }
 
 final Pointer<Never> nullptr = Pointer.fromAddress(0);
